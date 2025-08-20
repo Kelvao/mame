@@ -33,13 +33,14 @@ jobs:
             runs-on: ubuntu-latest
             cc: gcc
             cxx: g++
-            archopts: -U_FORTIFY_SOURCE
+            archopts: "-U_FORTIFY_SOURCE -m64"
             subtarget: tiny
             executable: mametiny
           - compiler: clang-x64
             runs-on: ubuntu-latest
             cc: clang
             cxx: clang++
+            archopts: "-m64"
             subtarget: mame
             executable: mame
           - compiler: gcc-arm64
@@ -78,12 +79,16 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
+        # Instalar dependências de desenvolvimento para arquiteturas nativas e cross
         sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev libfontconfig-dev libasound2-dev libxinerama-dev libxi-dev qtbase5-dev qtbase5-dev-tools
     - name: Install cross-compilation tools for ARM
       if: contains(matrix.compiler, 'arm')
       run: |
+        # Instalar toolchains de cross-compilação
         sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
         sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+        # Instalar bibliotecas de desenvolvimento para ARM
+        sudo apt-get install -y libsdl2-dev:arm64 libsdl2-ttf-dev:arm64 libfontconfig-dev:arm64
         sudo apt-get install -y clang
     - name: Install clang for x64
       if: matrix.compiler == 'clang-x64'
@@ -95,7 +100,16 @@ jobs:
         ARCHOPTS: ${{ matrix.archopts }}
         SUBTARGET: ${{ matrix.subtarget }}
         TOOLS: 1
-      run: make -j3
+      run: |
+        # Para builds cross, precisamos definir variáveis adicionais
+        if [[ "${{ matrix.compiler }}" == *"arm"* ]]; then
+          if [[ "${{ matrix.compiler }}" == *"64"* ]]; then
+            export CROSS=aarch64-linux-gnu-
+          else
+            export CROSS=arm-linux-gnueabihf-
+          fi
+        fi
+        make -j3
     - name: Validate (skip for cross-compiled builds)
       if: ${{ !contains(matrix.compiler, 'arm') }}
       run: ./${{ matrix.executable }} -validate
