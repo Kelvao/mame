@@ -27,20 +27,50 @@ jobs:
   build-linux:
     strategy:
       matrix:
-        compiler: [gcc, clang]
+        compiler: [gcc-x64, clang-x64, gcc-arm64, clang-arm64, gcc-arm32, clang-arm32]
         include:
-          - compiler: gcc
+          - compiler: gcc-x64
+            runs-on: ubuntu-latest
             cc: gcc
             cxx: g++
             archopts: -U_FORTIFY_SOURCE
             subtarget: tiny
             executable: mametiny
-          - compiler: clang
+          - compiler: clang-x64
+            runs-on: ubuntu-latest
             cc: clang
             cxx: clang++
             subtarget: mame
             executable: mame
-    runs-on: ubuntu-latest
+          - compiler: gcc-arm64
+            runs-on: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            cxx: aarch64-linux-gnu-g++
+            archopts: ""
+            subtarget: tiny
+            executable: mametiny
+          - compiler: clang-arm64
+            runs-on: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            archopts: "--target=aarch64-linux-gnu"
+            subtarget: mame
+            executable: mame
+          - compiler: gcc-arm32
+            runs-on: ubuntu-latest
+            cc: arm-linux-gnueabihf-gcc
+            cxx: arm-linux-gnueabihf-g++
+            archopts: ""
+            subtarget: tiny
+            executable: mametiny
+          - compiler: clang-arm32
+            runs-on: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            archopts: "--target=arm-linux-gnueabihf"
+            subtarget: mame
+            executable: mame
+    runs-on: ${{ matrix.runs-on }}
     steps:
     - uses: actions/checkout@main
       with:
@@ -49,8 +79,14 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev libfontconfig-dev libasound2-dev libxinerama-dev libxi-dev qtbase5-dev qtbase5-dev-tools
-    - name: Install clang
-      if: matrix.compiler == 'clang'
+    - name: Install cross-compilation tools for ARM
+      if: contains(matrix.compiler, 'arm')
+      run: |
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+        sudo apt-get install -y clang
+    - name: Install clang for x64
+      if: matrix.compiler == 'clang-x64'
       run: sudo apt-get install -y clang
     - name: Build
       env:
@@ -60,11 +96,14 @@ jobs:
         SUBTARGET: ${{ matrix.subtarget }}
         TOOLS: 1
       run: make -j3
-    - name: Validate
+    - name: Validate (skip for cross-compiled builds)
+      if: ${{ !contains(matrix.compiler, 'arm') }}
       run: ./${{ matrix.executable }} -validate
-    - name: Reconcile driver list
+    - name: Reconcile driver list (skip for cross-compiled builds)
+      if: ${{ !contains(matrix.compiler, 'arm') }}
       run: ./${{ matrix.executable }} -listxml | python scripts/build/makedep.py reconcilelist -l src/mame/${{ matrix.subtarget }}.lst -
-    - name: ORM check
+    - name: ORM check (skip for cross-compiled builds)
+      if: ${{ !contains(matrix.compiler, 'arm') }}
       run: python scripts/minimaws/minimaws.py load --executable ./${{ matrix.executable }} --softwarepath hash
     - uses: actions/upload-artifact@main
       with:
